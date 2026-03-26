@@ -1,0 +1,36 @@
+---
+title: Building at Scale — Lessons from Production
+date: 2026-03-20
+excerpt: What I learned shipping systems that handle millions of requests per day.
+tags: [architecture, backend, production]
+coverImage: ""
+published: true
+---
+
+# Building at Scale
+
+After running systems at 12M+ requests/day, a few truths become self-evident.
+
+## 1. Boring technology wins
+
+Redis, PostgreSQL, and a well-tuned Linux box will outperform most trendy solutions. The interesting work is in the *composition*, not the individual tools.
+
+## 2. Observability is not optional
+
+If you can't measure it, you can't improve it. Ship structured logging and metrics from day one — not as an afterthought.
+
+## 3. The database is usually the bottleneck
+
+```sql
+-- Add indexes before you need them
+CREATE INDEX CONCURRENTLY idx_events_user_created
+  ON events (user_id, created_at DESC);
+```
+
+Horizontal scaling only defers the inevitable database reckoning. Design your schema for the queries you'll actually run.
+
+## 4. Graceful degradation > hard failures
+
+Circuit breakers, fallback caches, and sensible timeouts separate reliable systems from fragile ones.
+
+More soon.
