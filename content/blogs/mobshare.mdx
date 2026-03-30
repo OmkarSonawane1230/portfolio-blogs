@@ -1,0 +1,137 @@
+---
+title: Building a Mobile App to Serve Notifications over Local WiFi
+date: 2026-03-30
+excerpt: A deep dive into how I built a custom mobile app that intercepts notifications and serves them to my laptop via an embedded HTTP server over a hotspot, complete with real-time UI animations.
+tags: [mobile, networking, architecture, android, animation]
+coverImage: "/images/project_1.avif"
+published: true
+---
+
+# Serving Mobile Notifications to My Laptop
+
+Welcome to my blog. Today, I want to talk about a recent side project that solved a major personal annoyance: missing mobile notifications while deep in the zone on my laptop. Instead of relying on bloated third-party sync apps or cloud services, I decided to build a localized, offline-first solution.
+
+The idea was simple: build a mobile app that listens to incoming notifications and simultaneously runs a lightweight HTTP server. By connecting my laptop to the phone's WiFi hotspot, I could just open my browser and access a local webpage to view my notifications securely, with fluid real-time animations.
+
+<img src="/images/project_1.avif" alt="App concept rendering" style={{ borderRadius: '12px', margin: '2rem 0' }} />
+
+## The Architecture
+
+To make this work seamlessly, the system required three working components, all running efficiently on the phone:
+
+1. **Notification Listener Service:** A background process hooking into Android's `NotificationListenerService` to capture payloads.
+2. **Embedded Web Server:** A localized HTTP server (using Ktor) running on port `8080`, hosting a sleek Single Page Application (SPA).
+3. **WebSocket Bridge:** A live connection pushing JSON payloads instantly from the phone to the laptop's browser.
+
+By using the phone's hotspot, the phone becomes the router (usually at `192.168.43.1`). Pointing the browser to `http://192.168.43.1:8080` loads the dashboard immediately, safely, and completely offline.
+
+## Implementation Breakdown
+
+Building an embedded server on a mobile device brings unique challenges, particularly around system resource management and real-time frontend updates.
+
+### 1. Intercepting the Data on Android
+
+Android makes it relatively straightforward (once permissions are granted) to read the rolling notification stream. Here's how the background service captures and forwards an alert:
+
+```kotlin
+class MyNotificationService : NotificationListenerService() {
+
+    override fun onNotificationPosted(sbn: StatusBarNotification) {
+        val extras = sbn.notification.extras
+        val title = extras.getString("android.title") ?: "Unknown"
+        val text = extras.getCharSequence("android.text")?.toString() ?: ""
+        
+        val payload = mapOf(
+            "app" to sbn.packageName,
+            "title" to title,
+            "message" to text,
+            "timestamp" to System.currentTimeMillis()
+        )
+
+        // Broadcast the notification to the embedded WebSocket server
+        LocalWebServer.broadcast(payload)
+    }
+
+    override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        // Sync dismissals with the web dashboard
+        LocalWebServer.broadcastRemoval(sbn.key)
+    }
+}
+```
+
+### 2. Building a Responsive, Animated Web Dashboard
+
+Serving raw text isn't fun. I wanted the notifications on my laptop monitor to slide in with a smooth animation, mirroring a native desktop experience. I used pure HTML/CSS and standard WebSockets on the frontend served by the phone. 
+
+To achieve smooth animations, we can rely on CSS transitions triggered by JavaScript:
+
+```html
+<!-- index.html (Served by the phone) -->
+<style>
+  .notification-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .notification {
+    background: #1e1e1e;
+    color: #fff;
+    padding: 16px 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transform: translateX(120%);
+    opacity: 0;
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.4s ease;
+  }
+  
+  .notification.slide-in {
+    transform: translateX(0);
+    opacity: 1;
+  }
+</style>
+
+<div class="notification-container" id="notif-container"></div>
+
+<script>
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+  const container = document.getElementById('notif-container');
+
+  ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    
+    // Create element
+    const el = document.createElement('div');
+    el.className = 'notification';
+    el.innerHTML = `<strong>${data.title}</strong><br/>${data.message}`;
+    
+    container.appendChild(el);
+    
+    // Trigger animation
+    requestAnimationFrame(() => {
+      el.classList.add('slide-in');
+    });
+
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+      el.classList.remove('slide-in');
+      setTimeout(() => el.remove(), 400); // Wait for transition
+    }, 5000);
+  };
+</script>
+```
+
+With this snippet, every time a WhatsApp message or calendar alert hits my phone, a sleek dark-mode card bounces into the corner of my laptop screen simultaneously.
+
+## Challenges & Battery Optimization
+
+The hardest part was outsmarting the Android OS power manager. Background apps holding open sockets are usually killed quickly to save battery. The solution? Elevating the Ktor web server to a **Foreground Service**.
+
+This requires showing a persistent, silent notification ("Server is running on 192.168.43.1"). As long as that's visible, the OS leaves the socket alone, and my laptop stays connected smoothly. 
+
+Running entirely off the grid over a WiFi hotspot means zero latency, absolute privacy, and total control over my own data. Plus, adding custom animations has made it feel like a premium tool.
+
+More posts coming soon. Stay tuned.
