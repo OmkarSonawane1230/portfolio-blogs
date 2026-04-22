@@ -1,0 +1,104 @@
+---
+title: "How to Write a Blog Post for This Site"
+date: "2026-04-22"
+excerpt: "A self-documenting template that shows every formatting feature you can use in a post — frontmatter, cover images, inline images, code blocks, and more."
+tags: ["Template", "Guide", "Markdown"]
+coverImage: "https://images.unsplash.com/photo-1499750310107-5fef28a66643"
+---
+
+This post is itself the template. The block above (between the two `---` lines) is called **frontmatter** and it must always be at the very top of the file. The body you're reading now is just standard Markdown.
+
+The filename of this file becomes the URL — keep it lowercase with hyphens, like `my-first-post.md` → `/blog/my-first-post`.
+
+## Frontmatter Fields
+
+- `title` — the post title (required, in quotes)
+- `date` — publish date in `YYYY-MM-DD` format (required, in quotes)
+- `excerpt` — short summary shown on the blog list (required, in quotes)
+- `tags` — array of tag strings (required)
+- `coverImage` — full public URL of the cover image, or `""` for none
+
+## Cover Image
+
+The cover image is set in the frontmatter at the top. Use a **full public URL** — for example from Unsplash, your GitHub repo's raw URL, or any image host:
+
+```
+coverImage: "https://images.unsplash.com/photo-1499750310107-5fef28a66643"
+```
+
+To skip the cover image entirely, leave it as `""`.
+
+## Inline Images Inside the Body
+
+For images inside the post body, use standard Markdown image syntax with a full URL:
+
+![A scenic mountain landscape](https://images.unsplash.com/photo-1506905925346-21bda4d32df4)
+
+The Markdown for that is:
+
+```
+![Alt text describing the image](https://full-image-url-here.jpg)
+```
+
+## Headings
+
+Use `##` for main sections and `###` for sub-sections. Don't use a single `#` (H1) — the title in the frontmatter already handles that.
+
+### This Is a Sub-Section
+
+You can nest sections like this for finer structure.
+
+## Text Formatting
+
+You can write **bold text** with `**bold**`, *italic text* with `*italic*`, and `inline code` with backticks. You can also add [links like this](https://example.com) using `[label](url)`.
+
+> Blockquotes look like this — useful for callouts or citations. Just start the line with `>`.
+
+## Code Blocks
+
+Always specify the language right after the opening triple backticks so syntax highlighting works. JavaScript example:
+
+```javascript
+async function getUser(id) {
+  const res = await fetch(`/api/users/${id}`);
+  if (!res.ok) throw new Error("User not found");
+  return res.json();
+}
+```
+
+Python:
+
+```python
+def fibonacci(n):
+    a, b = 0, 1
+    for _ in range(n):
+        a, b = b, a + b
+    return a
+```
+
+Bash/shell commands:
+
+```bash
+npm install redis
+npm run dev
+```
+
+Common language hints: `javascript`, `typescript`, `python`, `bash`, `json`, `css`, `html`, `sql`, `go`, `rust`.
+
+## Lists
+
+Bulleted list:
+
+- First item
+- Second item
+- Third item
+
+Numbered list:
+
+1. Step one
+2. Step two
+3. Step three
+
+## Wrapping Up
+
+Copy this file, change the frontmatter values, replace this body with your own content, and you have a working post. Push it to your GitHub blog repo, then toggle it visible in the Admin → Blog tab.

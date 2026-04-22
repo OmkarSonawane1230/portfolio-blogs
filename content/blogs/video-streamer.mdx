@@ -1,113 +1,231 @@
 ---
-title: "How to Write a Blog Post for This Site (Raj Sonawane)"
+title: "Building VideoStreamer: A Multi-Account Video Streaming Platform with Next.js, Mux, and Firebase"
 date: "2026-04-22"
-excerpt: "A self-documenting template that shows every formatting feature you can use in a post — frontmatter, cover images, inline images, code blocks, and more."
-tags: ["Template", "Guide", "Markdown"]
-coverImage: "https://images.unsplash.com/photo-1499750310107-5fef28a66643"
+excerpt: "How I built a production-ready video streaming web app that ingests videos from any URL, distributes load across multiple Mux accounts, and serves them with adaptive HLS playback — all powered by Next.js 16, Firestore, and a clean admin dashboard."
+tags: ["Next.js", "Mux", "Firebase", "Video Streaming", "TypeScript", "Full Stack"]
+coverImage: "REPLACE_WITH_GITHUB_RAW_URL_OF_HERO_BANNER.png"
 ---
 
-This post is itself the template. The block above (between the two `---` lines) is called **frontmatter** and it must always be at the very top of the file. The body you're reading now is just standard Markdown.
+> **Screenshot suggestion (cover):** A wide hero banner showing the VideoStreamer home page with the URL input field and a grid of recent video thumbnails. Aim for a 1600×800 image so it looks crisp on every device.
 
-The filename of this file becomes the URL — keep it lowercase with hyphens, like `my-first-post.md` → `/blog/my-first-post`.
+Streaming video on the web sounds simple until you actually try to do it. Encoding pipelines, adaptive bitrates, CDN delivery, storage limits, account quotas — each one is its own rabbit hole. **VideoStreamer** is my answer to all of that: a clean, multi-user web app that lets anyone paste a video URL and get back a smooth, professional player in seconds, with no manual encoding, no FTP uploads, and no per-account ceilings.
 
-## Frontmatter Fields
+In this post I'll walk through what VideoStreamer does, why I built it the way I did, the architecture behind it, and exactly how you can spin it up yourself in under fifteen minutes.
 
-- `title` — the post title (required, in quotes)
-- `date` — publish date in `YYYY-MM-DD` format (required, in quotes)
-- `excerpt` — short summary shown on the blog list (required, in quotes)
-- `tags` — array of tag strings (required)
-- `coverImage` — full public URL of the cover image, or `""` for none
+## What VideoStreamer Does
 
-## Cover Image
+At its core, the app does five things really well:
 
-The cover image is set in the frontmatter at the top. Use a **full public URL** — for example from Unsplash, your GitHub repo's raw URL, or any image host:
+- **Ingests videos from any public URL** — paste a link, it gets pulled into the platform automatically.
+- **Transcodes and streams via Mux** — adaptive HLS playback that works on every device.
+- **Spreads load across multiple Mux accounts** — when one account fills up, the next one takes over automatically.
+- **Organizes videos into playlists** — up to eight videos per playlist with sequential autoplay.
+- **Cleans up after itself** — a scheduled job deletes expired videos so you never blow past your quota.
 
+Everything is wrapped in a minimal, distraction-free UI built with Tailwind v4, and protected by a password-gated admin panel for the operator.
+
+> **Screenshot suggestion:** The home page (`/`) showing the paste-a-URL input at the top and the "Recent videos" grid below.
+
+## Why I Built It
+
+I kept running into the same problem: I had a handful of free-tier Mux accounts (each with its own monthly streaming and storage limits) and no easy way to use them as a pool. Either I'd manually pick which account to upload to — which got messy fast — or one account would silently hit its cap and break embeds.
+
+VideoStreamer treats every connected Mux account as a slot in a single virtual pool. The app picks the account with the most free capacity on every new upload, increments the usage atomically, and decrements it again when a video is deleted. From the user's perspective there's only ever **one** streaming service. From the operator's perspective, you can scale capacity by adding accounts in the admin panel.
+
+## The Tech Stack
+
+I deliberately kept the stack tight and modern:
+
+- **Next.js 16.2.4** with the App Router and Turbopack for the dev experience
+- **React 19** and **TypeScript** end-to-end
+- **Tailwind CSS v4** for styling
+- **`@mux/mux-node`** on the server for asset creation, status polling, and deletion
+- **`@mux/mux-player-react`** on the client for adaptive HLS playback
+- **Firebase Firestore** (via `firebase-admin` and a service account) as the source of truth
+- **Vercel Cron** for the scheduled cleanup job
+
+No Redux, no heavyweight state library, no custom video player. Every dependency earns its spot.
+
+## Architecture in One Diagram
+
+> **Screenshot suggestion:** A simple architecture diagram showing: **Browser → Next.js API routes → (Mux API + Firestore)**, with the Vercel Cron arrow pointing into `/api/cron/cleanup`. You can sketch this in Excalidraw or Figma and export as PNG.
+
+The flow is straightforward:
+
+1. A user pastes a URL on the home page.
+2. The browser hits `POST /api/video/create`.
+3. The server picks the least-loaded Mux account, kicks off ingestion, and writes a Firestore document with status `preparing`.
+4. The browser polls `GET /api/video/status?id=...`, which reconciles Mux's asset status back into Firestore and returns it.
+5. Once the asset is `ready`, the player on `/video/[id]` starts streaming.
+
+User identity is anonymous — every visitor gets an httpOnly `vs_uid` cookie on first visit, and that cookie scopes their personal video list and playlists. No signup, no email, no friction.
+
+## The Multi-Account Allocation Trick
+
+This is the part I'm most proud of. Each Mux account is a Firestore document that looks roughly like this:
+
+```typescript
+type MuxAccount = {
+  id: string;
+  label: string;
+  tokenId: string;
+  tokenSecret: string;
+  used: number;       // currently allocated slots
+  maxLimit: number;   // configurable per account
+};
 ```
-coverImage: "https://images.unsplash.com/photo-1499750310107-5fef28a66643"
+
+When a new upload comes in, the server runs `pickAvailableAccount()` — it scans every account, filters out the ones that are full (`used >= maxLimit`), and returns the one with the **most free slots** (`maxLimit - used`). That spreads load evenly instead of draining one account before touching the next.
+
+The clever bit is using Firestore's atomic `FieldValue.increment(1)` when a video is created and `FieldValue.increment(-1)` when it's deleted. That keeps the counter accurate even under concurrent uploads — no read-modify-write race conditions.
+
+```typescript
+await db.collection("muxAccounts").doc(accountId).update({
+  used: FieldValue.increment(1),
+});
 ```
 
-To skip the cover image entirely, leave it as `""`.
+If every account is full, the API returns a clear error so the user knows immediately instead of timing out.
 
-## Inline Images Inside the Body
+## Playlists, Done Right
 
-For images inside the post body, use standard Markdown image syntax with a full URL:
+> **Screenshot suggestion:** A playlist detail page (`/playlists/[id]`) showing the player at the top with two or three thumbnails listed below as the playlist queue.
 
-![A scenic mountain landscape](https://images.unsplash.com/photo-1506905925346-21bda4d32df4)
+Playlists are capped at eight videos each — a deliberate constraint that keeps the UI clean and the playback experience snappy. The player automatically advances to the next video when one finishes, and you can rename, reorder, or delete playlists from the same screen.
 
-The Markdown for that is:
+The API surface is exactly what you'd expect:
 
+```bash
+GET    /api/playlist           # list mine
+POST   /api/playlist           # create
+GET    /api/playlist/[id]      # detail
+PATCH  /api/playlist/[id]      # add | remove | rename
+DELETE /api/playlist/[id]      # delete
 ```
-![Alt text describing the image](https://full-image-url-here.jpg)
-```
 
-## Headings
+## The Admin Panel
 
-Use `##` for main sections and `###` for sub-sections. Don't use a single `#` (H1) — the title in the frontmatter already handles that.
+> **Screenshot suggestion:** The `/admin` dashboard with the Mux Accounts tab open, showing a table of accounts with their `used / max` columns and an "Add account" button.
 
-### This Is a Sub-Section
+The admin panel is gated by a single `ADMIN_PASSWORD` and an HMAC-signed cookie. From there you can:
 
-You can nest sections like this for finer structure.
+- **Add, edit, and remove Mux accounts** — paste a token ID and secret, set a max limit, and you're done.
+- **Set retention hours** — videos older than this get deleted automatically by the cron job.
+- **List or wipe every video** — handy for staging environments or quick resets.
+- **Change the admin password** — without ever touching the env vars again.
 
-## Text Formatting
+## Automatic Cleanup with Vercel Cron
 
-You can write **bold text** with `**bold**`, *italic text* with `*italic*`, and `inline code` with backticks. You can also add [links like this](https://example.com) using `[label](url)`.
+The `vercel.json` ships with a cron schedule that hits `/api/cron/cleanup` every ten minutes:
 
-> Blockquotes look like this — useful for callouts or citations. Just start the line with `>`.
-
-## Code Blocks
-
-Always specify the language right after the opening triple backticks so syntax highlighting works. JavaScript example:
-
-```javascript
-async function getUser(id) {
-  const res = await fetch(`/api/users/${id}`);
-  if (!res.ok) throw new Error("User not found");
-  return res.json();
+```json
+{
+  "crons": [
+    { "path": "/api/cron/cleanup", "schedule": "*/10 * * * *" }
+  ]
 }
 ```
 
-Python:
+The endpoint checks an `Authorization: Bearer <CRON_SECRET>` header (Vercel sends it automatically), looks up every video older than the configured retention window, deletes it from Mux, removes it from Firestore, and decrements the matching account's `used` counter. Self-healing, hands-off.
 
-```python
-def fibonacci(n):
-    a, b = 0, 1
-    for _ in range(n):
-        a, b = b, a + b
-    return a
-```
+## Setup: Run It Yourself in 15 Minutes
 
-Bash/shell commands:
+Here's everything you need to get VideoStreamer running locally or on Replit.
+
+### 1. Clone and install
 
 ```bash
-npm install redis
+git clone https://github.com/YOUR-USERNAME/videostreamer.git
+cd videostreamer
+npm install
+```
+
+### 2. Create a Firebase project
+
+1. Go to the [Firebase console](https://console.firebase.google.com) and create a new project.
+2. Enable **Cloud Firestore** in production mode (rules don't matter — we use the Admin SDK).
+3. In **Project Settings → Service Accounts**, click **Generate new private key** and download the JSON.
+
+> **Screenshot suggestion:** The Firebase "Service Accounts" tab with the **Generate new private key** button highlighted.
+
+### 3. Create at least one Mux account
+
+1. Sign up at [mux.com](https://mux.com) (the free tier is plenty to start).
+2. Go to **Settings → Access Tokens** and create a token with permissions for **Mux Video** (read + write).
+3. Copy the **Token ID** and **Token Secret** somewhere safe — you'll paste them into the admin panel later.
+
+> **Screenshot suggestion:** The Mux access-token creation screen with the "Mux Video" permission checkbox ticked.
+
+### 4. Configure environment variables
+
+Copy `.env.example` to `.env.local` and fill it in:
+
+```bash
+cp .env.example .env.local
+```
+
+Set the three variables:
+
+```bash
+# The entire service-account JSON, collapsed to ONE line
+FIREBASE_SERVICE_ACCOUNT='{"type":"service_account","project_id":"...","private_key":"...",...}'
+
+# Initial admin password — change it from the panel after first login
+ADMIN_PASSWORD="pick-something-strong"
+
+# Random string used by the cleanup cron
+CRON_SECRET="another-random-string"
+```
+
+> **Tip:** To collapse the Firebase JSON to one line, run `cat service-account.json | jq -c .` and copy the output.
+
+### 5. Start the dev server
+
+```bash
 npm run dev
 ```
 
-Common language hints: `javascript`, `typescript`, `python`, `bash`, `json`, `css`, `html`, `sql`, `go`, `rust`.
+The app boots on `http://localhost:5000` (or your Replit preview URL).
 
-## Lists
+### 6. Add your Mux accounts in the admin panel
 
-Bulleted list:
+Visit `/admin`, log in with the password you just set, open the **Mux Accounts** tab, and paste in the token ID and secret you copied from Mux. Set a `max limit` that matches your tier (for example, `100` for the free tier), and save.
 
-- First item
-- Second item
-- Third item
+> **Screenshot suggestion:** The "Add Mux account" modal/form filled in with example values.
 
-Numbered list:
+You're live. Paste any video URL on the home page and watch it transcode in real time.
 
-1. Step one
-2. Step two
-3. Step three
+### 7. Deploy to Vercel
 
-## Tables
+```bash
+npm i -g vercel
+vercel
+```
 
-| Feature        | Supported | Notes                        |
-|----------------|-----------|------------------------------|
-| Bold/italic    | Yes       | Standard Markdown            |
-| Code highlight | Yes       | Specify language after ```   |
-| Tables         | Yes       | GitHub-flavored Markdown     |
-| Inline images  | Yes       | Use full public URLs         |
+Add the same three env vars in the Vercel dashboard under **Project Settings → Environment Variables**. The cron in `vercel.json` will start firing automatically once deployed.
+
+## Things I Learned Building This
+
+A few takeaways from shipping the project:
+
+1. **Atomic counters > read-modify-write.** Firestore's `FieldValue.increment` saved me from an entire class of bugs around concurrent uploads.
+2. **Anonymous-by-default is freeing.** Skipping auth turned a weekend project into a one-evening project, and the cookie-scoping pattern is genuinely enough for personal-use tools.
+3. **Mux's polling model is your friend.** Don't try to be clever with webhooks for a small app — a simple `GET /api/video/status` poll from the player is more than fast enough and orders of magnitude easier to debug.
+4. **Constraints make the UX better.** The 8-video playlist cap and the strict retention window were the two best decisions I made; both prevent the app from ever feeling cluttered or expensive.
+
+## What's Next
+
+A few features on the roadmap:
+
+- Optional public sharing links with view counts
+- Per-video custom thumbnails (instead of Mux's auto-generated one)
+- A "transfer ownership" flow for when a `vs_uid` cookie is lost
+- Webhook-based status updates as a faster alternative to polling
 
 ## Wrapping Up
 
-Copy this file, change the frontmatter values, replace this body with your own content, and you have a working post. Push it to your GitHub blog repo, then toggle it visible in the Admin → Blog tab.
+VideoStreamer is the kind of project I love to build — small enough to fully understand, opinionated enough to ship, and useful enough that I actually use it every week. The full source is on my GitHub, and the setup above should get you running in a single sitting.
+
+If you spin it up, hit me up — I'd love to see what you're using it for.
+
+> **Screenshot suggestion (closing):** A clean shot of the video player page (`/video/[id]`) with a video actively playing, showing the Mux player UI in your brand's color scheme.
