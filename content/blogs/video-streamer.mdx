@@ -3,7 +3,7 @@ title: "Building VideoStreamer: A Multi-Account Video Streaming Platform with Ne
 date: "2026-04-22"
 excerpt: "How I built a production-ready video streaming web app that ingests videos from any URL, distributes load across multiple Mux accounts, and serves them with adaptive HLS playback — all powered by Next.js 16, Firestore, and a clean admin dashboard."
 tags: ["Next.js", "Mux", "Firebase", "Video Streaming", "TypeScript", "Full Stack"]
-coverImage: "REPLACE_WITH_GITHUB_RAW_URL_OF_HERO_BANNER.png"
+coverImage: "https://raw.githubusercontent.com/OmkarSonawane1230/portfolio-blogs/main/content/images/cover-page.png"
 ---
 
 > **Screenshot suggestion (cover):** A wide hero banner showing the VideoStreamer home page with the URL input field and a grid of recent video thumbnails. Aim for a 1600×800 image so it looks crisp on every device.
@@ -48,7 +48,7 @@ No Redux, no heavyweight state library, no custom video player. Every dependency
 
 ## Architecture in One Diagram
 
-> **Screenshot suggestion:** A simple architecture diagram showing: **Browser → Next.js API routes → (Mux API + Firestore)**, with the Vercel Cron arrow pointing into `/api/cron/cleanup`. You can sketch this in Excalidraw or Figma and export as PNG.
+![VideoStreamer architecture diagram — Browser → Next.js (App Router) → Mux Accounts Pool + Firebase Firestore → Mux CDN/HLS Player, with a Vercel Cron job cleaning up expired videos](https://raw.githubusercontent.com/OmkarSonawane1230/portfolio-blogs/main/content/images/video-processing.png)
 
 The flow is straightforward:
 
