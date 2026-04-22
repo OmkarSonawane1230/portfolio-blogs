@@ -6,8 +6,6 @@ tags: ["Next.js", "Mux", "Firebase", "Video Streaming", "TypeScript", "Full Stac
 coverImage: "https://raw.githubusercontent.com/OmkarSonawane1230/portfolio-blogs/main/content/images/cover-page.png"
 ---
 
-> **Screenshot suggestion (cover):** A wide hero banner showing the VideoStreamer home page with the URL input field and a grid of recent video thumbnails. Aim for a 1600×800 image so it looks crisp on every device.
-
 Streaming video on the web sounds simple until you actually try to do it. Encoding pipelines, adaptive bitrates, CDN delivery, storage limits, account quotas — each one is its own rabbit hole. **VideoStreamer** is my answer to all of that: a clean, multi-user web app that lets anyone paste a video URL and get back a smooth, professional player in seconds, with no manual encoding, no FTP uploads, and no per-account ceilings.
 
 In this post I'll walk through what VideoStreamer does, why I built it the way I did, the architecture behind it, and exactly how you can spin it up yourself in under fifteen minutes.
@@ -24,7 +22,7 @@ At its core, the app does five things really well:
 
 Everything is wrapped in a minimal, distraction-free UI built with Tailwind v4, and protected by a password-gated admin panel for the operator.
 
-> **Screenshot suggestion:** The home page (`/`) showing the paste-a-URL input at the top and the "Recent videos" grid below.
+![Video Processing](https://raw.githubusercontent.com/OmkarSonawane1230/portfolio-blogs/main/content/images/video-processing.png)
 
 ## Why I Built It
 
@@ -48,7 +46,7 @@ No Redux, no heavyweight state library, no custom video player. Every dependency
 
 ## Architecture in One Diagram
 
-![VideoStreamer architecture diagram — Browser → Next.js (App Router) → Mux Accounts Pool + Firebase Firestore → Mux CDN/HLS Player, with a Vercel Cron job cleaning up expired videos](https://raw.githubusercontent.com/OmkarSonawane1230/portfolio-blogs/main/content/images/video-processing.png)
+![VideoStreamer architecture diagram — Browser → Next.js (App Router) → Mux Accounts Pool + Firebase Firestore → Mux CDN/HLS Player, with a Vercel Cron job cleaning up expired videos](https://raw.githubusercontent.com/OmkarSonawane1230/portfolio-blogs/main/content/images/architecture.svg)
 
 The flow is straightforward:
 
@@ -89,7 +87,7 @@ If every account is full, the API returns a clear error so the user knows immedi
 
 ## Playlists, Done Right
 
-> **Screenshot suggestion:** A playlist detail page (`/playlists/[id]`) showing the player at the top with two or three thumbnails listed below as the playlist queue.
+![Playlist Demo](https://raw.githubusercontent.com/OmkarSonawane1230/portfolio-blogs/main/content/images/playlist-demo.png)
 
 Playlists are capped at eight videos each — a deliberate constraint that keeps the UI clean and the playback experience snappy. The player automatically advances to the next video when one finishes, and you can rename, reorder, or delete playlists from the same screen.
 
@@ -105,7 +103,7 @@ DELETE /api/playlist/[id]      # delete
 
 ## The Admin Panel
 
-> **Screenshot suggestion:** The `/admin` dashboard with the Mux Accounts tab open, showing a table of accounts with their `used / max` columns and an "Add account" button.
+![Playlist Demo](https://raw.githubusercontent.com/OmkarSonawane1230/portfolio-blogs/main/content/images/admin-page.png)
 
 The admin panel is gated by a single `ADMIN_PASSWORD` and an HMAC-signed cookie. From there you can:
 
@@ -146,15 +144,11 @@ npm install
 2. Enable **Cloud Firestore** in production mode (rules don't matter — we use the Admin SDK).
 3. In **Project Settings → Service Accounts**, click **Generate new private key** and download the JSON.
 
-> **Screenshot suggestion:** The Firebase "Service Accounts" tab with the **Generate new private key** button highlighted.
-
 ### 3. Create at least one Mux account
 
 1. Sign up at [mux.com](https://mux.com) (the free tier is plenty to start).
 2. Go to **Settings → Access Tokens** and create a token with permissions for **Mux Video** (read + write).
 3. Copy the **Token ID** and **Token Secret** somewhere safe — you'll paste them into the admin panel later.
-
-> **Screenshot suggestion:** The Mux access-token creation screen with the "Mux Video" permission checkbox ticked.
 
 ### 4. Configure environment variables
 
@@ -191,8 +185,6 @@ The app boots on `http://localhost:5000` (or your Replit preview URL).
 
 Visit `/admin`, log in with the password you just set, open the **Mux Accounts** tab, and paste in the token ID and secret you copied from Mux. Set a `max limit` that matches your tier (for example, `100` for the free tier), and save.
 
-> **Screenshot suggestion:** The "Add Mux account" modal/form filled in with example values.
-
 You're live. Paste any video URL on the home page and watch it transcode in real time.
 
 ### 7. Deploy to Vercel
@@ -228,4 +220,4 @@ VideoStreamer is the kind of project I love to build — small enough to fully u
 
 If you spin it up, hit me up — I'd love to see what you're using it for.
 
-> **Screenshot suggestion (closing):** A clean shot of the video player page (`/video/[id]`) with a video actively playing, showing the Mux player UI in your brand's color scheme.
+![Video Demo](https://raw.githubusercontent.com/OmkarSonawane1230/portfolio-blogs/main/content/images/video-playing.png)
